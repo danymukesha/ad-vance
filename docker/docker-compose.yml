@@ -1,0 +1,135 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ad-vance-orchestrator
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=advancedb
+    volumes:
+      - ../logs:/app/logs
+      - ../data:/app/data
+    depends_on:
+      - ollama
+      - neo4j
+    networks:
+      - ad-vance-net
+    restart: unless-stopped
+
+  data-integration:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ad-vance-data
+    ports:
+      - "8001:8001"
+    environment:
+      - ADNI_API_URL=${ADNI_API_URL}
+      - AMPAD_API_URL=${AMPAD_API_URL}
+    volumes:
+      - ../data:/app/data
+      - ../data/cache:/app/data/cache
+    networks:
+      - ad-vance-net
+    restart: unless-stopped
+
+  knowledge-graph:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ad-vance-kg
+    ports:
+      - "8002:8002"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=advancedb
+    volumes:
+      - ../data:/app/data
+    networks:
+      - ad-vance-net
+    restart: unless-stopped
+
+  hypothesis-generation:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ad-vance-hypothesis
+    ports:
+      - "8003:8003"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ../models:/app/models
+    networks:
+      - ad-vance-net
+    restart: unless-stopped
+
+  validation:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ad-vance-validation
+    ports:
+      - "8004:8004"
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - ad-vance-net
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ad-vance-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - ad-vance-net
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.14-community
+    container_name: ad-vance-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/advancedb
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    networks:
+      - ad-vance-net
+    restart: unless-stopped
+
+  dashboard:
+    image: node:18-alpine
+    container_name: ad-vance-dashboard
+    working_dir: /app
+    command: sh -c "npm install -g http-server && http-server /app -p 3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../notebooks:/app
+    networks:
+      - ad-vance-net
+    restart: unless-stopped
+
+networks:
+  ad-vance-net:
+    driver: bridge
+
+volumes:
+  ollama-data:
+  neo4j-data:
+  neo4j-logs:
